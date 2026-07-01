@@ -1759,9 +1759,10 @@ function startMistakePracticeAll(words) {
     let attempts = 0;
     const correct = getWordTranslations(word);
     const ph = getPhonetic(word);
+    let input;
     function show() {
       $('#main').innerHTML = '<div class="stage"><div class="session-bar"><div class="seg">❌ 错词练习 <b>' + (cursor + 1) + '/' + queue.length + '</b></div><div class="spacer"></div><div class="seg">错误次数 <b>' + (state.mistakes[word]?.count || 0) + '</b></div></div><div class="learn-pane"><div class="stage-tag recall">错词复习</div><div class="phonetic" style="font-size:18px;margin:16px 0;justify-content:center"><span class="flag" data-acc="uk"><span class="lbl">UK</span> /' + escapeHtml(ph.uk) + '/</span><span class="flag" data-acc="us"><span class="lbl">US</span> /' + escapeHtml(ph.us) + '/</span></div><div class="translation" style="font-size:20px;text-align:center;padding:20px"><span class="pos">' + escapeHtml(correct.split(' ')[0]) + '</span>' + escapeHtml(correct.split(' ').slice(1).join(' ')) + '</div><div class="spell-input-wrap"><input type="text" class="spell-input" id="spellInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在此输入单词..." /></div><div class="attempt-bar" id="attemptBar" style="display:none"><span>剩余尝试：</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="attempt-msg" id="attemptMsg"></span></div><div class="controls" style="justify-content:center"><button class="btn" id="readBtn">🔊 朗读</button><span style="color:var(--muted);font-size:12px;margin-left:8px">按 Enter 提交</span></div></div></div>';
-      const input = $('#spellInput');
+      input = $('#spellInput');
       input.focus();
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); submit(); }
@@ -1795,7 +1796,6 @@ function startMistakePracticeAll(words) {
         }
       }
     }
-    let input;
     show();
   }
   render();
