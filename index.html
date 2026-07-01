@@ -1383,9 +1383,10 @@ function buildTodayPhases() {
     const ws = state.wordState[w];
     if (!ws || !ws.nextReview || ws.nextReview > now) return false;
     if (reviewDone.includes(w)) return false;
+    if (mistakeDone.includes(w)) return false;
     return true;
   });
-  const mistakeQueue = Object.keys(state.mistakes).filter(w => !mistakeDone.includes(w));
+  const mistakeQueue = Object.keys(state.mistakes).filter(w => !mistakeDone.includes(w) && !reviewDone.includes(w));
   const phase3 = reviewQueue.concat(mistakeQueue);
   return { phase1, phase2, phase3, allNew, meaningDone, spellDone };
 }
