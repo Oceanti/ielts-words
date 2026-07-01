@@ -1642,7 +1642,7 @@ function submitSpell() {
 }
 
 function startReviewOrMistakeSession(word, isMistake) {
-  todayState.current = { word, stage: isMistake ? 'mistake' : 'review', attempts: 0, isMistake };
+  todayState.current = { word, stage: isMistake ? 'mistake' : 'review', attempts: 0, isMistake, revealed: false };
   const correct = getWordTranslations(word);
   const ph = getPhonetic(word);
   const lv = ensureWordState(word).level || 1;
@@ -1700,21 +1700,9 @@ function submitReviewOrMistake() {
     const el = $('.spell-input');
     if (el) { el.classList.add('error'); setTimeout(() => el.classList.remove('error'), 350); }
     if (todayState.current.attempts >= 3) {
+      todayState.current.revealed = true;
       document.getElementById('attemptBar').style.display = 'flex';
-      document.getElementById('attemptMsg').textContent = '答案：' + word;
-      // mistake 模式答错: count++ 留在错词本
-      // review 模式答错: 标记错词
-      if (!isMistake) markMistake(word);
-      const ws = ensureWordState(word);
-      ws.level = 0;
-      ws.nextReview = nowTs() + 86400000;
-      ws.lastSeenTs = nowTs();
-      save(STORAGE.wordState, state.wordState);
-      if (!state.todayProgress.mistakeDone.includes(word)) {
-        state.todayProgress.mistakeDone.push(word);
-        save(STORAGE.todayProgress, state.todayProgress);
-      }
-      setTimeout(() => renderToday(), 2200);
+      document.getElementById('attemptMsg').textContent = '答案：' + word + ' — 请正确输入后按 Enter';
     } else {
       const left = 3 - todayState.current.attempts;
       document.getElementById('attemptBar').style.display = 'flex';
@@ -1761,7 +1749,7 @@ function startMistakePracticeAll(words) {
       return;
     }
     const word = queue[cursor];
-    let attempts = 0;
+    let attempts = 0, revealed = false;
     const correct = getWordTranslations(word);
     const ph = getPhonetic(word);
     let input;
@@ -1782,6 +1770,7 @@ function startMistakePracticeAll(words) {
       const isCorrect = guess.toLowerCase() === word.toLowerCase();
       if (isCorrect) {
         attempts = 0;
+        revealed = false;
         showToast('✓ 拼对', 'good');
         cursor++;
         render();
@@ -1790,9 +1779,10 @@ function startMistakePracticeAll(words) {
         const inp = $('.spell-input');
         if (inp) { inp.classList.add('error'); setTimeout(() => inp.classList.remove('error'), 350); }
         if (attempts >= 3) {
+          revealed = true;
           document.getElementById('attemptBar').style.display = 'flex';
-          document.getElementById('attemptMsg').textContent = '答案：' + word;
-          setTimeout(() => { cursor++; render(); }, 1800);
+          document.getElementById('attemptMsg').textContent = '答案：' + word + ' — 请正确输入后按 Enter';
+          input.select();
         } else {
           const left = 3 - attempts;
           document.getElementById('attemptBar').style.display = 'flex';
