@@ -1597,12 +1597,16 @@ function submitSpell() {
     setTimeout(() => {
       try {
         const _p = buildTodayPhases();
+        console.log('[DBG] spell done, phase2 length=' + _p.phase2.length + ', next word=' + _p.phase2[0]);
         if (_p.phase2.length > 0) {
+          console.log('[DBG] calling startSpellSession for:', _p.phase2[0]);
           startSpellSession(_p.phase2[0], _p.phase2.length, _p.allNew.length);
+          console.log('[DBG] startSpellSession done, todayState.current.word=' + todayState.current.word);
         } else {
+          console.log('[DBG] phase2 empty, calling renderToday()');
           renderToday();
         }
-      } catch(e) { showToast('错误: ' + e.message, 'bad'); }
+      } catch(e) { console.error('[DBG] error in advance:', e); showToast('错误: ' + e.message, 'bad'); }
     }, 50);
   } else {
     todayState.current.attempts++;
