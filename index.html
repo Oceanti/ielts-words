@@ -1150,7 +1150,28 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ===================== V2 ===================== */
+/* ===================== V2.2 ===================== */
+const APP_VERSION = '2.2';
+console.log('[ielts-words] v' + APP_VERSION + ' — loaded at', new Date().toISOString());
+console.log('[ielts-words] state.mistakes count at load:', Object.keys(state.mistakes).length);
+// DEBUG: catch deletion from state.mistakes
+{
+  let _prev = Object.keys(state.mistakes).length;
+  const _cm = () => {
+    const c = Object.keys(state.mistakes).length;
+    if (c !== _prev) { console.error('[ielts-words] *** state.mistakes count:', _prev, '→', c, new Error().stack); _prev = c; }
+  };
+  setInterval(_cm, 1000);
+  const _os = save;
+  save = function(k, v) {
+    if (k === 'ielts_mistakes_v2') {
+      const c = Object.keys(v).length;
+      if (c < _prev) console.error('[ielts-words] *** save(mistakes) drop:', _prev, '→', c, new Error().stack.split('\n').slice(0,6).join('\n'));
+      _prev = c;
+    }
+    return _os(k, v);
+  };
+}
 const DICT = window.WORD_DICT || {};
 const STORAGE = {
   theme: 'ielts_theme_v2',
