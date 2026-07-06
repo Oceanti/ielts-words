@@ -635,6 +635,16 @@
 .choice-btn.dim { opacity: 0.4; }
 .stage-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; background: var(--accent); color: #fff; margin-bottom: 12px; }
 .stage-tag.recall { background: var(--bg-3); color: var(--accent-2); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.day-nav { display: flex; gap: 6px; padding: 8px 0 16px; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.day-nav .day-btn { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-2); color: var(--muted); font-size: 11px; cursor: pointer; transition: all .15s; min-width: 52px; }
+.day-nav .day-btn:hover { border-color: var(--accent); color: var(--fg); }
+.day-nav .day-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.day-nav .day-btn.active .day-prog { color: rgba(255,255,255,.7); }
+.day-nav .day-btn.done { border-color: var(--good); }
+.day-nav .day-btn.done .day-prog { color: var(--good); }
+.day-nav .day-prog { font-size: 10px; }
+.prev-word-badge { text-align:center; font-size:14px; color:var(--muted); padding:10px 0 6px; }
+.prev-word-badge b { color:var(--accent); font-weight:600; }
 .learn-pane { background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 32px 40px; box-shadow: var(--shadow); }
 .learn-pane .word-display { font-family: var(--font-mono); font-size: 56px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em; color: var(--fg); }
 .learn-pane .phonetic { color: var(--muted); font-family: var(--font-mono); font-size: 14px; margin: 8px 0 0; display: flex; gap: 14px; align-items: center; }
@@ -1151,6 +1161,7 @@ const STORAGE = {
   round: 'ielts_round_v2',
   view: 'ielts_view_v2',
   opts: 'ielts_opts_v2',
+  days: 'ielts_days_v2',
 };
 
 function load(key, def) {
@@ -1176,6 +1187,7 @@ const state = {
   todayProgress: load(STORAGE.todayProgress, { date: '', newDone: [], reviewDone: [] }),
   round: load(STORAGE.round, null),
   opts: load(STORAGE.opts, { showPhonetic: true, showTranslation: true }),
+  days: load(STORAGE.days, {}),
 };
 
 const REVIEW_INTERVALS = [1, 2, 4, 7, 15, 30];
@@ -1187,16 +1199,33 @@ if (!state.round) {
   state.round.day = Math.min(15, Math.max(1, daysBetween(new Date(todayStr()).getTime(), new Date(state.round.startDate).getTime()) + 1));
   save(STORAGE.round, state.round);
 }
-if (!state.todayProgress.day || state.todayProgress.day !== (state.round.day || 1)) {
-  state.todayProgress = { day: state.round.day || 1, date: todayStr(), meaningDone: [], spellDone: [], reviewDone: [], mistakeDone: [], newDone: [] };
-  save(STORAGE.todayProgress, state.todayProgress);
-} else {
-  state.todayProgress.meaningDone = state.todayProgress.meaningDone || [];
-  state.todayProgress.spellDone = state.todayProgress.spellDone || [];
-  state.todayProgress.reviewDone = state.todayProgress.reviewDone || [];
-  state.todayProgress.mistakeDone = state.todayProgress.mistakeDone || [];
-  state.todayProgress.newDone = state.todayProgress.newDone || [];
+
+function getDayProgress(day) {
+  return state.days[day] || { day, date: todayStr(), meaningDone: [], spellDone: [], reviewDone: [], mistakeDone: [], newDone: [] };
 }
+function saveTodayProgress() {
+  const day = state.todayProgress.day || state.round.day;
+  if (day && state.todayProgress.meaningDone) {
+    state.days[day] = { ...state.todayProgress, day };
+    save(STORAGE.days, state.days);
+  }
+  save(STORAGE.todayProgress, state.todayProgress);
+}
+
+if (state.todayProgress && state.todayProgress.meaningDone) {
+  if (state.todayProgress.day) {
+    if (state.todayProgress.day !== state.round.day) {
+      state.days[state.todayProgress.day] = { ...state.todayProgress };
+    } else {
+      state.days[state.round.day] = { ...state.todayProgress };
+    }
+  } else {
+    state.days[state.round.day || 1] = { ...state.todayProgress, day: state.round.day || 1 };
+  }
+  save(STORAGE.days, state.days);
+}
+state.todayProgress = getDayProgress(state.round.day || 1);
+Object.assign(state.todayProgress, { meaningDone: state.todayProgress.meaningDone || [], spellDone: state.todayProgress.spellDone || [], reviewDone: state.todayProgress.reviewDone || [], mistakeDone: state.todayProgress.mistakeDone || [], newDone: state.todayProgress.newDone || [] });
 
 function currentDayNumber() {
   return Math.min(15, state.round.day || 1);
@@ -1333,24 +1362,17 @@ function updateBrandProgress() {
   const total = todayNewWords().length;
   const meaningDone = state.todayProgress.meaningDone.length;
   const spellDone = state.todayProgress.spellDone.length;
-  const mistakeDone = state.todayProgress.mistakeDone.length;
-  const reviewDone = state.todayProgress.reviewDone.length;
-  const mistakePool = Object.keys(state.mistakes).length;
-  const reviewPool = (function(){
-    const now = nowTs();
-    return Object.keys(state.wordState).filter(w => {
-      const ws = state.wordState[w];
-      return ws && ws.nextReview && ws.nextReview <= now;
-    }).length;
-  })();
-  const p3 = mistakePool + reviewPool - mistakeDone - reviewDone;
+  const mistakes = Object.keys(state.mistakes).length;
+  const { phase1, phase2, phase3 } = buildTodayPhases();
+  const p3 = phase3.length;
   const bp = $('#brandProgress');
-  if (bp) bp.textContent = '· Day ' + day + '/15 · 选中文 ' + meaningDone + '/' + total + (meaningDone < total ? ' (-' + (total - meaningDone) + ')' : ' ✓') + ' · 拼写 ' + spellDone + '/' + total + (spellDone < total ? ' (-' + (total - spellDone) + ')' : ' ✓') + ' · 错/复习 ' + p3;
+  if (bp) bp.textContent = '· Day ' + day + '/15 · 选中文 ' + meaningDone + '/' + total + (meaningDone < total ? ' (-' + (total - meaningDone) + ')' : ' ✓') + ' · 拼写 ' + spellDone + '/' + total + (spellDone < total ? ' (-' + (total - spellDone) + ')' : ' ✓') + ' · 错词 ' + mistakes + (mistakes > 0 ? ' · 待复习 ' + p3 : '');
 }
 
 function updateMistakeBadge() {
   const b = $('#mistakeBadge');
   if (!b) return;
+  // 显示错词本总条目数（用户手动删除才会变化）
   const n = Object.keys(state.mistakes).length;
   if (n > 0) { b.textContent = n; b.hidden = false; }
   else b.hidden = true;
@@ -1366,7 +1388,30 @@ function startToday() {
   renderToday();
 }
 
+function syncMistakesFromReviews() {
+  const now = nowTs();
+  let added = 0;
+  Object.keys(state.wordState).forEach(w => {
+    const ws = state.wordState[w];
+    if (ws && ws.nextReview && ws.nextReview <= now) {
+      if (!state.mistakes[w]) {
+        state.mistakes[w] = { count: 1, lastErr: now };
+        added++;
+      } else {
+        state.mistakes[w].count = (state.mistakes[w].count || 0) + 1;
+        state.mistakes[w].lastErr = now;
+      }
+    }
+  });
+  if (added > 0) {
+    save(STORAGE.mistakes, state.mistakes);
+    updateMistakeBadge();
+  }
+}
+
 function buildTodayPhases() {
+  // 同步：把到期的复习词并入错词本，使两者数量一致
+  syncMistakesFromReviews();
   // 返回三个 phase:
   //  phase1 (meaning):  今日新词 减去 meaningDone
   //  phase2 (spell):    今日新词 减去 spellDone (但必须 meaningDone 已有)
@@ -1387,7 +1432,10 @@ function buildTodayPhases() {
     return true;
   });
   const mistakeQueue = Object.keys(state.mistakes).filter(w => !mistakeDone.includes(w) && !reviewDone.includes(w));
-  const phase3 = reviewQueue.concat(mistakeQueue);
+  // 去重：reviewQueue 中已在 mistakeQueue 的不重复计入
+  const seen = new Set(mistakeQueue);
+  const reviewOnly = reviewQueue.filter(w => !seen.has(w));
+  const phase3 = mistakeQueue.concat(reviewOnly);
   return { phase1, phase2, phase3, allNew, meaningDone, spellDone };
 }
 
@@ -1399,16 +1447,13 @@ function renderToday() {
   const noWork = phase1.length === 0 && phase2.length === 0 && phase3.length === 0;
   if (noWork) {
     const nextDay = day < 15 ? day + 1 : 15;
-    $('#main').innerHTML = '<div class="stage"><div class="learn-pane session-finish"><h2>🎉 今日份完成</h2><p>' + todayStr() + ' · Day ' + day + '/15</p><div class="stats"><div class="item"><div class="num">' + meaningDone.length + '/' + allNew.length + '</div><div class="lbl">中文熟悉</div></div><div class="item"><div class="num">' + spellDone.length + '/' + allNew.length + '</div><div class="lbl">拼写</div></div><div class="item"><div class="num">' + Object.keys(state.mistakes).length + '</div><div class="lbl">错词累计</div></div></div><div class="actions"><button class="btn primary" id="endBtn">回到主菜单</button><button class="btn" id="mistakeBtn">查看错词</button>' + (day < 15 ? '<button class="btn" id="nextDayBtn">继续学习 Day ' + nextDay + '</button>' : '') + '</div></div></div>';
+    $('#main').innerHTML = renderDayNav() + '<div class="stage"><div class="learn-pane session-finish"><h2>🎉 今日份完成</h2><p>' + todayStr() + ' · Day ' + day + '/15</p><div class="stats"><div class="item"><div class="num">' + meaningDone.length + '/' + allNew.length + '</div><div class="lbl">中文熟悉</div></div><div class="item"><div class="num">' + spellDone.length + '/' + allNew.length + '</div><div class="lbl">拼写</div></div><div class="item"><div class="num">' + Object.keys(state.mistakes).length + '</div><div class="lbl">错词累计</div></div></div><div class="actions"><button class="btn primary" id="endBtn">回到主菜单</button><button class="btn" id="mistakeBtn">查看错词</button>' + (day < 15 ? '<button class="btn" id="nextDayBtn">继续学习 Day ' + nextDay + '</button>' : '') + '</div></div></div>';
+    rebindDayNav();
     $('#endBtn').addEventListener('click', () => { state.view = 'today'; save(STORAGE.view, 'today'); renderToday(); });
     $('#mistakeBtn').addEventListener('click', () => { state.view = 'mistakes'; save(STORAGE.view, 'mistakes'); renderMistakes(); });
     const nextBtn = $('#nextDayBtn');
     if (nextBtn) nextBtn.addEventListener('click', () => {
-      state.round.day = Math.min(15, (state.round.day || 1) + 1);
-      save(STORAGE.round, state.round);
-      state.todayProgress = { day: state.round.day, date: todayStr(), meaningDone: [], spellDone: [], reviewDone: [], mistakeDone: [], newDone: [] };
-      save(STORAGE.todayProgress, state.todayProgress);
-      renderToday();
+      switchDay(Math.min(15, (state.round.day || 1) + 1));
     });
     return;
   }
@@ -1438,8 +1483,42 @@ function renderToday() {
   }
 }
 
+function renderDayNav() {
+  const current = state.round.day || 1;
+  let html = '<div class="day-nav">';
+  for (let d = 1; d <= 15; d++) {
+    const p = state.days[d];
+    const words = (typeof DAILY_SCHEDULE !== 'undefined' && DAILY_SCHEDULE[d - 1]) || [];
+    const total = words.length;
+    const done = p ? p.meaningDone.length : 0;
+    const active = d === current ? 'active' : '';
+    const complete = total > 0 && done >= total ? 'done' : '';
+    html += '<button class="day-btn ' + active + ' ' + complete + '" data-day="' + d + '">Day' + d + '<span class="day-prog">' + done + '/' + total + '</span></button>';
+  }
+  html += '</div>';
+  return html;
+}
+function rebindDayNav() {
+  $$('.day-nav .day-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = parseInt(btn.dataset.day);
+      if (d !== state.round.day) switchDay(d);
+    });
+  });
+}
+function switchDay(day) {
+  if (state.todayProgress && state.todayProgress.meaningDone) {
+    state.days[state.round.day] = { ...state.todayProgress };
+  }
+  state.round.day = Math.min(15, Math.max(1, day));
+  save(STORAGE.round, state.round);
+  state.todayProgress = getDayProgress(state.round.day);
+  save(STORAGE.days, state.days);
+  renderToday();
+}
+
 function renderTodayHeader(day, allNew, meaningDone, spellDone, p3Len) {
-  return '<div class="stage"><div class="session-bar">'
+  return renderDayNav() + '<div class="stage"><div class="session-bar">'
     + '<div class="seg">📅 Day <b>' + day + '/15</b></div>'
     + '<div class="seg sep">·</div>'
     + '<div class="seg">🀄 选中文 <b>' + meaningDone.length + '/' + allNew.length + (meaningDone.length < allNew.length ? ' (-' + (allNew.length - meaningDone.length) + ')' : ' ✓') + '</b></div>'
@@ -1465,6 +1544,7 @@ function startMeaningSession(word, remaining, total) {
     + '<div class="choice-grid">' + choices.map((c, i) => '<button class="choice-btn" data-i="' + i + '"><span class="marker">' + (i+1) + '</span>' + escapeHtml(c) + '</button>').join('') + '</div>'
     + '<div class="attempt-bar" id="attemptBar" style="display:none"><span>剩余尝试：</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="attempt-msg" id="attemptMsg"></span></div>'
     + '</div></div>';
+  rebindDayNav();
   $$('.choice-btn').forEach(btn => btn.addEventListener('click', () => handleMeaningChoice(parseInt(btn.dataset.i), choices, word)));
   $$('.flag').forEach(flag => {
     flag.addEventListener('click', () => {
@@ -1498,7 +1578,7 @@ function handleMeaningChoice(idx, choices, word) {
   if (isCorrect) {
     if (!state.todayProgress.meaningDone.includes(word)) {
       state.todayProgress.meaningDone.push(word);
-      save(STORAGE.todayProgress, state.todayProgress);
+      saveTodayProgress();
     }
     updateBrandProgress();
     setTimeout(() => renderToday(), 600);
@@ -1509,7 +1589,7 @@ function handleMeaningChoice(idx, choices, word) {
       // 也算 meaning done, 选错的 word 不进 spell 阶段
       if (!state.todayProgress.meaningDone.includes(word)) {
         state.todayProgress.meaningDone.push(word);
-        save(STORAGE.todayProgress, state.todayProgress);
+        saveTodayProgress();
       }
       setTimeout(() => renderToday(), 1800);
     } else {
@@ -1530,7 +1610,9 @@ function startSpellSession(word, remaining, total) {
   todayState.current = { word, stage: 'spell', attempts: 0, correct: false, revealed: false };
   const correctText = getWordTranslations(word);
   const ph = getPhonetic(word);
+  const prev = state.todayProgress.lastSpellWord;
   $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, buildTodayPhases().phase3.length)
+    + (prev ? '<div class="prev-word-badge">上一个：<b>' + escapeHtml(prev) + '</b></div>' : '')
     + '<div class="learn-pane">'
     + '<div class="stage-tag recall">第 2 轮 · 拼写</div>'
     + '<div class="translation" style="font-size:24px;font-weight:600;text-align:center;padding:24px 20px 8px;color:var(--fg)">' + escapeHtml(correctText) + '</div>'
@@ -1539,6 +1621,7 @@ function startSpellSession(word, remaining, total) {
     + '<div class="attempt-bar" id="attemptBar" style="display:none"><span class="attempt-msg" id="attemptMsg"></span></div>'
     + '<div class="controls" style="justify-content:center"><button class="btn" id="readBtn">🔊 朗读</button><button class="btn" id="hintBtn">💡 提示</button><button class="btn" id="revealBtn">👁 显示答案</button><span style="color:var(--muted);font-size:12px;margin-left:8px">按 Enter 提交</span></div>'
     + '</div></div>';
+  rebindDayNav();
   const input = $('#spellInput');
   input.focus();
   input.addEventListener('keydown', (e) => {
@@ -1581,7 +1664,7 @@ function submitSpell() {
   if (isCorrect) {
     if (!state.todayProgress.spellDone.includes(word)) {
       state.todayProgress.spellDone.push(word);
-      save(STORAGE.todayProgress, state.todayProgress);
+      saveTodayProgress();
     }
     const ws = ensureWordState(word);
     ws.level = answerShown ? 1 : Math.max(2, ws.level || 0);
@@ -1589,7 +1672,7 @@ function submitSpell() {
     ws.lastSeenTs = nowTs();
     if (!state.todayProgress.newDone.includes(word)) {
       state.todayProgress.newDone.push(word);
-      save(STORAGE.todayProgress, state.todayProgress);
+      saveTodayProgress();
     }
     state.stats.newWords++;
     save(STORAGE.stats, state.stats);
@@ -1600,6 +1683,8 @@ function submitSpell() {
         const _p = buildTodayPhases();
         console.log('[DBG] spell done, phase2 length=' + _p.phase2.length + ', next word=' + _p.phase2[0]);
         if (_p.phase2.length > 0) {
+          state.todayProgress.lastSpellWord = word;
+          saveTodayProgress();
           console.log('[DBG] calling startSpellSession for:', _p.phase2[0]);
           startSpellSession(_p.phase2[0], _p.phase2.length, _p.allNew.length);
           console.log('[DBG] startSpellSession done, todayState.current.word=' + todayState.current.word);
@@ -1657,6 +1742,7 @@ function startReviewOrMistakeSession(word, isMistake) {
     + '<div class="attempt-bar" id="attemptBar" style="display:none"><span>剩余尝试：</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="attempt-msg" id="attemptMsg"></span></div>'
     + '<div class="controls" style="justify-content:center"><button class="btn" id="readBtn">🔊 朗读</button><span style="color:var(--muted);font-size:12px;margin-left:8px">按 Enter 提交</span></div>'
     + '</div></div>';
+  rebindDayNav();
   const input = $('#spellInput');
   input.focus();
   input.addEventListener('keydown', (e) => {
@@ -1676,9 +1762,13 @@ function submitReviewOrMistake() {
   const isCorrect = guess.toLowerCase() === word.toLowerCase();
   if (isCorrect) {
     if (isMistake) {
+      // 重新预约到未来，但保留在错词本（用户可手动删除）
+      const ws = ensureWordState(word);
+      if (ws) scheduleNextReview(ws, true);
+      save(STORAGE.wordState, state.wordState);
       if (!state.todayProgress.mistakeDone.includes(word)) {
         state.todayProgress.mistakeDone.push(word);
-        save(STORAGE.todayProgress, state.todayProgress);
+        saveTodayProgress();
       }
       showToast('✓ 拼对', 'good');
     } else {
@@ -1686,7 +1776,7 @@ function submitReviewOrMistake() {
       scheduleNextReview(ws, true);
       if (!state.todayProgress.reviewDone.includes(word)) {
         state.todayProgress.reviewDone.push(word);
-        save(STORAGE.todayProgress, state.todayProgress);
+        saveTodayProgress();
       }
       state.stats.reviews++;
       save(STORAGE.stats, state.stats);
@@ -1724,13 +1814,31 @@ function renderMistakes() {
   const rows = list.map(({ w, count }) => {
     const ph = getPhonetic(w);
     const tr = getWordTranslations(w);
-    return '<div class="mistake-row"><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button></div>';
+    return '<div class="mistake-row"><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button><button class="btn btn-sm" data-del="' + escapeHtml(w) + '" style="color:var(--danger);font-size:13px;padding:4px 8px" title="从错词本移除">✕</button></div>';
   }).join('');
   $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="padding:0"><div class="dash-section" style="display:flex;justify-content:space-between;align-items:center"><div><h2>错词本</h2><div class="sub">' + list.length + ' 个错词 · 按错误次数降序</div></div><div style="display:flex;gap:8px"><button class="btn primary" id="practiceAllBtn">开始全部练习</button><button class="btn danger" id="clearMistakesBtn">🗑 清空错词本</button></div></div><div class="mistake-list">' + rows + '</div></div></div>';
   $$('.mistake-row [data-w]').forEach(btn => btn.addEventListener('click', () => startMistakePracticeAll([btn.dataset.w])));
+  $$('.mistake-row [data-del]').forEach(btn => btn.addEventListener('click', () => {
+    const w = btn.dataset.del;
+    delete state.mistakes[w];
+    // 同步清理：把 wordState 的 nextReview 推到远未来，避免 sync 重新拉回来
+    if (state.wordState[w]) {
+      state.wordState[w].nextReview = nowTs() + 365 * 86400000;
+      save(STORAGE.wordState, state.wordState);
+    }
+    save(STORAGE.mistakes, state.mistakes);
+    updateMistakeBadge();
+    renderMistakes();
+  }));
   $('#practiceAllBtn').addEventListener('click', () => startMistakePracticeAll(list.map(x => x.w)));
   $('#clearMistakesBtn').addEventListener('click', () => {
     if (confirm('确定清空全部 ' + list.length + ' 个错词？此操作不可撤销。')) {
+      // 清空错词本的同时，把所有相关 wordState 的 nextReview 推到远未来
+      const future = nowTs() + 365 * 86400000;
+      Object.keys(state.mistakes).forEach(w => {
+        if (state.wordState[w]) state.wordState[w].nextReview = future;
+      });
+      save(STORAGE.wordState, state.wordState);
       state.mistakes = {};
       save(STORAGE.mistakes, state.mistakes);
       updateMistakeBadge();
@@ -1742,6 +1850,7 @@ function renderMistakes() {
 function startMistakePracticeAll(words) {
   let queue = words.slice();
   let cursor = 0;
+  let lastPracticeWord = null;
   function render() {
     if (cursor >= queue.length) {
       $('#main').innerHTML = '<div class="stage"><div class="learn-pane session-finish"><h2>错词练习完成</h2><p>本次 ' + queue.length + ' 个错词</p><div class="actions" style="justify-content:center"><button class="btn primary" id="endBtn">完成</button></div></div></div>';
@@ -1754,7 +1863,7 @@ function startMistakePracticeAll(words) {
     const ph = getPhonetic(word);
     let input;
     function show() {
-      $('#main').innerHTML = '<div class="stage"><div class="session-bar"><div class="seg">❌ 错词练习 <b>' + (cursor + 1) + '/' + queue.length + '</b></div><div class="spacer"></div><div class="seg">错误次数 <b>' + (state.mistakes[word]?.count || 0) + '</b></div></div><div class="learn-pane"><div class="stage-tag recall">错词复习</div><div class="phonetic" style="font-size:18px;margin:16px 0;justify-content:center"><span class="flag" data-acc="uk"><span class="lbl">UK</span> /' + escapeHtml(ph.uk) + '/</span><span class="flag" data-acc="us"><span class="lbl">US</span> /' + escapeHtml(ph.us) + '/</span></div><div class="translation" style="font-size:20px;text-align:center;padding:20px"><span class="pos">' + escapeHtml(correct.split(' ')[0]) + '</span>' + escapeHtml(correct.split(' ').slice(1).join(' ')) + '</div><div class="spell-input-wrap"><input type="text" class="spell-input" id="spellInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在此输入单词..." /></div><div class="attempt-bar" id="attemptBar" style="display:none"><span>剩余尝试：</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="attempt-msg" id="attemptMsg"></span></div><div class="controls" style="justify-content:center"><button class="btn" id="readBtn">🔊 朗读</button><span style="color:var(--muted);font-size:12px;margin-left:8px">按 Enter 提交</span></div></div></div>';
+      $('#main').innerHTML = '<div class="stage"><div class="session-bar"><div class="seg">❌ 错词练习 <b>' + (cursor + 1) + '/' + queue.length + '</b></div><div class="spacer"></div><div class="seg">错误次数 <b>' + (state.mistakes[word]?.count || 0) + '</b></div></div>' + (lastPracticeWord ? '<div class="prev-word-badge">上一个：<b>' + escapeHtml(lastPracticeWord) + '</b></div>' : '') + '<div class="learn-pane"><div class="stage-tag recall">错词复习</div><div class="phonetic" style="font-size:18px;margin:16px 0;justify-content:center"><span class="flag" data-acc="uk"><span class="lbl">UK</span> /' + escapeHtml(ph.uk) + '/</span><span class="flag" data-acc="us"><span class="lbl">US</span> /' + escapeHtml(ph.us) + '/</span></div><div class="translation" style="font-size:20px;text-align:center;padding:20px"><span class="pos">' + escapeHtml(correct.split(' ')[0]) + '</span>' + escapeHtml(correct.split(' ').slice(1).join(' ')) + '</div><div class="spell-input-wrap"><input type="text" class="spell-input" id="spellInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="在此输入单词..." /></div><div class="attempt-bar" id="attemptBar" style="display:none"><span>剩余尝试：</span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="attempt-msg" id="attemptMsg"></span></div><div class="controls" style="justify-content:center"><button class="btn" id="readBtn">🔊 朗读</button><span style="color:var(--muted);font-size:12px;margin-left:8px">按 Enter 提交</span></div></div></div>';
       input = $('#spellInput');
       input.focus();
       input.addEventListener('keydown', (e) => {
@@ -1771,7 +1880,14 @@ function startMistakePracticeAll(words) {
       if (isCorrect) {
         attempts = 0;
         revealed = false;
+        // 重置复习计划（避免明天还来）但保留在错词本中
+        const ws = state.wordState[word];
+        if (ws) {
+          scheduleNextReview(ws, true);
+          save(STORAGE.wordState, state.wordState);
+        }
         showToast('✓ 拼对', 'good');
+        lastPracticeWord = word;
         cursor++;
         render();
       } else {
