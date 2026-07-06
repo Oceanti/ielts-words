@@ -1154,19 +1154,26 @@
 const APP_VERSION = '2.2';
 console.log('[ielts-words] v' + APP_VERSION + ' — loaded at', new Date().toISOString());
 console.log('[ielts-words] state.mistakes count at load:', Object.keys(state.mistakes).length);
-// DEBUG: catch deletion from state.mistakes
+// DEBUG: detect deletion from state.mistakes
 {
   let _prev = Object.keys(state.mistakes).length;
+  let _dbgDiv = null;
+  function _dbg(msg) {
+    if (!_dbgDiv) { _dbgDiv = document.createElement('div'); _dbgDiv.id = 'mistakeDebug'; _dbgDiv.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#f00;color:#fff;font:13px/1.4 monospace;padding:8px 12px;white-space:pre-wrap'; document.body.appendChild(_dbgDiv); }
+    const t = new Date().toLocaleTimeString();
+    _dbgDiv.textContent = '[' + t + '] ' + msg + '\n' + _dbgDiv.textContent.slice(0, 2000);
+    console.error('[ielts-words] ' + msg);
+  }
   const _cm = () => {
     const c = Object.keys(state.mistakes).length;
-    if (c !== _prev) { console.error('[ielts-words] *** state.mistakes count:', _prev, '→', c, new Error().stack); _prev = c; }
+    if (c !== _prev) { _dbg('state.mistakes count: ' + _prev + ' → ' + c); _prev = c; }
   };
   setInterval(_cm, 1000);
   const _os = save;
   save = function(k, v) {
     if (k === 'ielts_mistakes_v2') {
       const c = Object.keys(v).length;
-      if (c < _prev) console.error('[ielts-words] *** save(mistakes) drop:', _prev, '→', c, new Error().stack.split('\n').slice(0,6).join('\n'));
+      if (c < _prev) _dbg('save(mistakes) count DROPPED: ' + _prev + ' → ' + c);
       _prev = c;
     }
     return _os(k, v);
