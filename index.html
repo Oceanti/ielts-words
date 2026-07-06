@@ -1153,32 +1153,6 @@
 /* ===================== V2.2 ===================== */
 const APP_VERSION = '2.2';
 console.log('[ielts-words] v' + APP_VERSION + ' — loaded at', new Date().toISOString());
-console.log('[ielts-words] state.mistakes count at load:', Object.keys(state.mistakes).length);
-// DEBUG: detect deletion from state.mistakes
-{
-  let _prev = Object.keys(state.mistakes).length;
-  let _dbgDiv = null;
-  function _dbg(msg) {
-    if (!_dbgDiv) { _dbgDiv = document.createElement('div'); _dbgDiv.id = 'mistakeDebug'; _dbgDiv.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#f00;color:#fff;font:13px/1.4 monospace;padding:8px 12px;white-space:pre-wrap'; document.body.appendChild(_dbgDiv); }
-    const t = new Date().toLocaleTimeString();
-    _dbgDiv.textContent = '[' + t + '] ' + msg + '\n' + _dbgDiv.textContent.slice(0, 2000);
-    console.error('[ielts-words] ' + msg);
-  }
-  const _cm = () => {
-    const c = Object.keys(state.mistakes).length;
-    if (c !== _prev) { _dbg('state.mistakes count: ' + _prev + ' → ' + c); _prev = c; }
-  };
-  setInterval(_cm, 1000);
-  const _os = save;
-  save = function(k, v) {
-    if (k === 'ielts_mistakes_v2') {
-      const c = Object.keys(v).length;
-      if (c < _prev) _dbg('save(mistakes) count DROPPED: ' + _prev + ' → ' + c);
-      _prev = c;
-    }
-    return _os(k, v);
-  };
-}
 const DICT = window.WORD_DICT || {};
 const STORAGE = {
   theme: 'ielts_theme_v2',
@@ -1254,6 +1228,30 @@ if (state.todayProgress && state.todayProgress.meaningDone) {
 }
 state.todayProgress = getDayProgress(state.round.day || 1);
 Object.assign(state.todayProgress, { meaningDone: state.todayProgress.meaningDone || [], spellDone: state.todayProgress.spellDone || [], reviewDone: state.todayProgress.reviewDone || [], mistakeDone: state.todayProgress.mistakeDone || [], newDone: state.todayProgress.newDone || [] });
+
+// DEBUG: detect deletion from state.mistakes
+{
+  let _prev = Object.keys(state.mistakes).length;
+  let _dbgDiv = null;
+  const _dbg = (msg) => {
+    if (!_dbgDiv) { _dbgDiv = document.createElement('div'); _dbgDiv.id = 'mistakeDebug'; _dbgDiv.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#f00;color:#fff;font:13px/1.4 monospace;padding:8px 12px;white-space:pre-wrap'; document.body.appendChild(_dbgDiv); }
+    const t = new Date().toLocaleTimeString();
+    _dbgDiv.textContent = '[' + t + '] ' + msg + '\n' + _dbgDiv.textContent.slice(0, 2000);
+  };
+  setInterval(() => {
+    const c = Object.keys(state.mistakes).length;
+    if (c !== _prev) { _dbg('state.mistakes count: ' + _prev + ' → ' + c); _prev = c; }
+  }, 1000);
+  const _os = save;
+  save = (k, v) => {
+    if (k === 'ielts_mistakes_v2') {
+      const c = Object.keys(v).length;
+      if (c < _prev) _dbg('save(mistakes) DROPPED: ' + _prev + ' → ' + c + ' | ' + new Error().stack.split('\n')[2]);
+      _prev = c;
+    }
+    return _os(k, v);
+  };
+}
 
 function currentDayNumber() {
   return Math.min(15, state.round.day || 1);
@@ -1553,7 +1551,7 @@ function renderTodayHeader(day, allNew, meaningDone, spellDone, p3Len) {
     + '<div class="seg sep">·</div>'
     + '<div class="seg">✍️ 拼写 <b>' + spellDone.length + '/' + allNew.length + (spellDone.length < allNew.length ? ' (-' + (allNew.length - spellDone.length) + ')' : ' ✓') + '</b></div>'
     + '<div class="seg sep">·</div>'
-    + '<div class="seg">❌ 错/复习 <b>' + p3Len + '</b></div>'
+    + '<div class="seg">❌ 错词 <b>' + Object.keys(state.mistakes).length + '</b></div>'
     + '</div></div>';
 }
 
