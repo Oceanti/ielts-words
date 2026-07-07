@@ -1823,22 +1823,28 @@ function renderMistakes() {
   $$('.mistake-row [data-del]').forEach(btn => btn.addEventListener('click', () => {
     const w = btn.dataset.del;
     delete state.mistakes[w];
-    // 同步清理：把 wordState 的 nextReview 推到远未来，避免 sync 重新拉回来
-    if (state.wordState[w]) {
-      state.wordState[w].nextReview = nowTs() + 365 * 86400000;
-      save(STORAGE.wordState, state.wordState);
-    }
+    // 确保 wordState 存在且 nextReview 推到远未来，防止从 reviewQueue 再出现
+    if (!state.wordState[w]) state.wordState[w] = { level: 0, nextReview: 0, wrongCount: 0, correctStreak: 0, lastSeenTs: 0 };
+    state.wordState[w].nextReview = nowTs() + 365 * 86400000;
+    save(STORAGE.wordState, state.wordState);
     save(STORAGE.mistakes, state.mistakes);
+    // 同时从今日完成列表中移除，避免残留干扰
+    const tp = state.todayProgress;
+    if (tp) {
+      tp.mistakeDone = (tp.mistakeDone || []).filter(x => x !== w);
+      tp.reviewDone = (tp.reviewDone || []).filter(x => x !== w);
+      saveTodayProgress();
+    }
     updateMistakeBadge();
     renderMistakes();
   }));
   $('#practiceAllBtn').addEventListener('click', () => startMistakePracticeAll(list.map(x => x.w)));
   $('#clearMistakesBtn').addEventListener('click', () => {
     if (confirm('确定清空全部 ' + list.length + ' 个错词？此操作不可撤销。')) {
-      // 清空错词本的同时，把所有相关 wordState 的 nextReview 推到远未来
       const future = nowTs() + 365 * 86400000;
       Object.keys(state.mistakes).forEach(w => {
-        if (state.wordState[w]) state.wordState[w].nextReview = future;
+        if (!state.wordState[w]) state.wordState[w] = { level: 0, nextReview: 0, wrongCount: 0, correctStreak: 0, lastSeenTs: 0 };
+        state.wordState[w].nextReview = future;
       });
       save(STORAGE.wordState, state.wordState);
       state.mistakes = {};
