@@ -1414,30 +1414,7 @@ function startToday() {
   renderToday();
 }
 
-function syncMistakesFromReviews() {
-  const now = nowTs();
-  let added = 0;
-  Object.keys(state.wordState).forEach(w => {
-    const ws = state.wordState[w];
-    if (ws && ws.nextReview && ws.nextReview <= now) {
-      if (!state.mistakes[w]) {
-        state.mistakes[w] = { count: 1, lastErr: now };
-        added++;
-      } else {
-        state.mistakes[w].count = (state.mistakes[w].count || 0) + 1;
-        state.mistakes[w].lastErr = now;
-      }
-    }
-  });
-  if (added > 0) {
-    save(STORAGE.mistakes, state.mistakes);
-    updateMistakeBadge();
-  }
-}
-
 function buildTodayPhases() {
-  // 同步：把到期的复习词并入错词本，使两者数量一致
-  syncMistakesFromReviews();
   // 返回三个 phase:
   //  phase1 (meaning):  今日新词 减去 meaningDone
   //  phase2 (spell):    今日新词 减去 spellDone (但必须 meaningDone 已有)
@@ -1499,7 +1476,7 @@ function renderToday() {
   if (currentPhase === 'review' && state.mistakes[currentWord]) {
     currentPhase = 'mistake';
   }
-  $('#main').innerHTML = renderTodayHeader(day, allNew, meaningDone, spellDone, phase3.length);
+  $('#main').innerHTML = renderTodayHeader(day, allNew, meaningDone, spellDone, state.todayProgress.mistakeDone || [], Object.keys(state.mistakes).length);
   if (currentPhase === 'meaning') {
     startMeaningSession(currentWord, phase1.length, allNew.length);
   } else if (currentPhase === 'spell') {
@@ -1543,7 +1520,7 @@ function switchDay(day) {
   renderToday();
 }
 
-function renderTodayHeader(day, allNew, meaningDone, spellDone, p3Len) {
+function renderTodayHeader(day, allNew, meaningDone, spellDone, mistakeDone, totalMistakes) {
   return renderDayNav() + '<div class="stage"><div class="session-bar">'
     + '<div class="seg">📅 Day <b>' + day + '/15</b></div>'
     + '<div class="seg sep">·</div>'
@@ -1551,7 +1528,7 @@ function renderTodayHeader(day, allNew, meaningDone, spellDone, p3Len) {
     + '<div class="seg sep">·</div>'
     + '<div class="seg">✍️ 拼写 <b>' + spellDone.length + '/' + allNew.length + (spellDone.length < allNew.length ? ' (-' + (allNew.length - spellDone.length) + ')' : ' ✓') + '</b></div>'
     + '<div class="seg sep">·</div>'
-    + '<div class="seg">❌ 错词 <b>' + Object.keys(state.mistakes).length + '</b></div>'
+    + '<div class="seg">❌ 错词 <b>' + mistakeDone.length + '/' + totalMistakes + '</b></div>'
     + '</div></div>';
 }
 
@@ -1561,7 +1538,7 @@ function startMeaningSession(word, remaining, total) {
   const distractors = pickDistractors(correct, 3);
   const choices = shuffleArr([correct, ...distractors]);
   const ph = getPhonetic(word);
-  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, buildTodayPhases().phase3.length)
+  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, state.todayProgress.mistakeDone || [], Object.keys(state.mistakes).length)
     + '<div class="learn-pane">'
     + '<div class="stage-tag">第 1 轮 · 选中文</div>'
     + '<div class="word-display">' + escapeHtml(word) + '</div>'
@@ -1637,7 +1614,7 @@ function startSpellSession(word, remaining, total) {
   const correctText = getWordTranslations(word);
   const ph = getPhonetic(word);
   const prev = state.todayProgress.lastSpellWord;
-  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, buildTodayPhases().phase3.length)
+  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, state.todayProgress.mistakeDone || [], Object.keys(state.mistakes).length)
     + (prev ? '<div class="prev-word-badge">上一个：<b>' + escapeHtml(prev) + '</b></div>' : '')
     + '<div class="learn-pane">'
     + '<div class="stage-tag recall">第 2 轮 · 拼写</div>'
@@ -1758,8 +1735,7 @@ function startReviewOrMistakeSession(word, isMistake) {
   const ph = getPhonetic(word);
   const lv = ensureWordState(word).level || 1;
   const isM = isMistake;
-  const phase3 = buildTodayPhases().phase3.length;
-  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, phase3)
+  $('#main').innerHTML = renderTodayHeader(currentDayNumber(), todayNewWords(), state.todayProgress.meaningDone, state.todayProgress.spellDone, state.todayProgress.mistakeDone || [], Object.keys(state.mistakes).length)
     + '<div class="learn-pane">'
     + '<div class="stage-tag ' + (isM ? '' : 'recall') + '">' + (isM ? '错词重练' : ('复习 · Lv' + lv)) + '</div>'
     + '<div class="phonetic" style="font-size:18px;margin:16px 0;justify-content:center"><span class="flag" data-acc="uk"><span class="lbl">UK</span> /' + escapeHtml(ph.uk) + '/</span><span class="flag" data-acc="us"><span class="lbl">US</span> /' + escapeHtml(ph.us) + '/</span></div>'
@@ -1832,7 +1808,7 @@ function submitReviewOrMistake() {
 function renderMistakes() {
   const list = Object.entries(state.mistakes)
     .map(([w, m]) => ({ w, count: m.count || 0, lastErr: m.lastErr || 0 }))
-    .sort((a, b) => b.count - a.count || b.lastErr - a.lastErr);
+    .sort((a, b) => b.count - a.count || a.w.localeCompare(b.w));
   if (list.length === 0) {
     $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="text-align:center;padding:60px 20px"><h2 style="font-size:32px;margin:0 0 8px">🎉 错词本是空的</h2><p style="color:var(--muted)">还没错过任何词。继续保持！</p></div></div>';
     return;
