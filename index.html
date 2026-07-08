@@ -1789,6 +1789,7 @@ function submitReviewOrMistake() {
     setTimeout(() => renderToday(), 500);
   } else {
     todayState.current.attempts++;
+    markMistake(word);
     const el = $('.spell-input');
     if (el) { el.classList.add('error'); setTimeout(() => el.classList.remove('error'), 350); }
     if (todayState.current.attempts >= 3) {
@@ -1900,6 +1901,8 @@ function startMistakePracticeAll(words) {
         render();
       } else {
         attempts++;
+        markMistake(word);
+        updateBrandProgress();
         const inp = $('.spell-input');
         if (inp) { inp.classList.add('error'); setTimeout(() => inp.classList.remove('error'), 350); }
         if (attempts >= 3) {
