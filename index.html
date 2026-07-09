@@ -669,8 +669,9 @@
 .session-finish .stats .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .session-finish .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .mistake-list { display: grid; grid-template-columns: 1fr; gap: 0; }
-.mistake-row { display: grid; grid-template-columns: 60px 1fr 80px 60px 100px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border-2); }
+.mistake-row { display: grid; grid-template-columns: 40px 50px 1fr 80px 60px 100px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border-2); }
 .mistake-row:hover { background: var(--bg-3); }
+.mistake-row .idx { text-align: center; color: var(--muted); font-size: 13px; font-family: var(--font-mono); }
 .mistake-row .count { text-align: center; font-family: var(--font-mono); font-weight: 700; color: var(--bad); font-size: 16px; }
 .mistake-row .word { font-family: var(--font-mono); font-weight: 600; font-size: 15px; }
 .mistake-row .phonetic { color: var(--muted); font-size: 12px; font-family: var(--font-mono); }
@@ -937,7 +938,7 @@
   .choice-grid { grid-template-columns: 1fr; }
   .learn-pane { padding: 22px 18px; }
   .learn-pane .word-display { font-size: 36px; }
-  .mistake-row { grid-template-columns: 50px 1fr 70px; font-size: 13px; }
+  .mistake-row { grid-template-columns: 32px 40px 1fr 60px; font-size: 13px; }
   .mistake-row .phonetic, .mistake-row .translation { display: none; }
   .sentence-en { font-size: 15px; padding: 16px 18px; }
   .spell-input { font-size: 28px !important; padding: 14px 16px !important; }
@@ -1814,10 +1815,10 @@ function renderMistakes() {
     $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="text-align:center;padding:60px 20px"><h2 style="font-size:32px;margin:0 0 8px">🎉 错词本是空的</h2><p style="color:var(--muted)">还没错过任何词。继续保持！</p></div></div>';
     return;
   }
-  const rows = list.map(({ w, count }) => {
+  const rows = list.map(({ w, count }, idx) => {
     const ph = getPhonetic(w);
     const tr = getWordTranslations(w);
-    return '<div class="mistake-row"><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button><button class="btn btn-sm" data-del="' + escapeHtml(w) + '" style="color:var(--danger);font-size:13px;padding:4px 8px" title="从错词本移除">✕</button></div>';
+    return '<div class="mistake-row"><div class="idx">' + (idx + 1) + '</div><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button><button class="btn btn-sm" data-del="' + escapeHtml(w) + '" style="color:var(--danger);font-size:13px;padding:4px 8px" title="从错词本移除">✕</button></div>';
   }).join('');
   $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="padding:0"><div class="dash-section" style="display:flex;justify-content:space-between;align-items:center"><div><h2>错词本</h2><div class="sub">' + list.length + ' 个错词 · 按错误次数降序</div></div><div style="display:flex;gap:8px"><button class="btn primary" id="practiceAllBtn">开始全部练习</button><button class="btn danger" id="clearMistakesBtn">🗑 清空错词本</button></div></div><div class="mistake-list">' + rows + '</div></div></div>';
   $$('.mistake-row [data-w]').forEach(btn => btn.addEventListener('click', () => startMistakePracticeAll([btn.dataset.w])));
