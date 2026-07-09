@@ -676,6 +676,7 @@
 .mistake-row .word { font-family: var(--font-mono); font-weight: 600; font-size: 15px; }
 .mistake-row .phonetic { color: var(--muted); font-size: 12px; font-family: var(--font-mono); }
 .mistake-row .translation { color: var(--fg-2); font-size: 13px; }
+.mistake-row .actions { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
 .dash-section { padding: 18px 24px; border-bottom: 1px solid var(--border-2); }
 .dash-section h2 { margin: 0 0 4px; font-size: 18px; }
 .dash-section .sub { color: var(--muted); font-size: 12px; }
@@ -1809,7 +1810,7 @@ function submitReviewOrMistake() {
 // ============== MISTAKES ==============
 function renderMistakes() {
   const list = Object.entries(state.mistakes)
-    .map(([w, m]) => ({ w, count: m.count || 0, lastErr: m.lastErr || 0 }))
+    .map(([w, m]) => ({ w, count: Number(m.count) || 0, lastErr: Number(m.lastErr) || 0 }))
     .sort((a, b) => b.count - a.count || a.w.localeCompare(b.w));
   if (list.length === 0) {
     $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="text-align:center;padding:60px 20px"><h2 style="font-size:32px;margin:0 0 8px">🎉 错词本是空的</h2><p style="color:var(--muted)">还没错过任何词。继续保持！</p></div></div>';
@@ -1818,7 +1819,7 @@ function renderMistakes() {
   const rows = list.map(({ w, count }, idx) => {
     const ph = getPhonetic(w);
     const tr = getWordTranslations(w);
-    return '<div class="mistake-row"><div class="idx">' + (idx + 1) + '</div><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button><button class="btn btn-sm" data-del="' + escapeHtml(w) + '" style="color:var(--danger);font-size:13px;padding:4px 8px" title="从错词本移除">✕</button></div>';
+    return '<div class="mistake-row"><div class="idx">' + (idx + 1) + '</div><div class="count">' + count + '</div><div class="word">' + escapeHtml(w) + '</div><div class="phonetic">/' + escapeHtml(ph.uk || ph.us) + '/</div><div class="translation">' + escapeHtml(tr) + '</div><div class="actions"><button class="btn primary" data-w="' + escapeHtml(w) + '">练</button><button class="btn btn-sm" data-del="' + escapeHtml(w) + '" style="color:var(--danger);font-size:13px;padding:4px 8px" title="从错词本移除">✕</button></div></div>';
   }).join('');
   $('#main').innerHTML = '<div class="stage"><div class="learn-pane" style="padding:0"><div class="dash-section" style="display:flex;justify-content:space-between;align-items:center"><div><h2>错词本</h2><div class="sub">' + list.length + ' 个错词 · 按错误次数降序</div></div><div style="display:flex;gap:8px"><button class="btn primary" id="practiceAllBtn">开始全部练习</button><button class="btn danger" id="clearMistakesBtn">🗑 清空错词本</button></div></div><div class="mistake-list">' + rows + '</div></div></div>';
   $$('.mistake-row [data-w]').forEach(btn => btn.addEventListener('click', () => startMistakePracticeAll([btn.dataset.w])));
